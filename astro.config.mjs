@@ -3,9 +3,10 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import starlight from "@astrojs/starlight";
 import starlightVersions from "starlight-versions";
+import consentFooter from "./src/plugins/consent-footer";
 import { readFileSync } from "node:fs";
 import docsImages from "./integrations/docs-images.mjs";
-import consentFooter from "./src/plugins/consent-footer";
+import allVersionsPage from "./integrations/all-versions-page.mjs";
 
 /*
  * Documentation versions. The latest docs are served at /docs/* (no entry
@@ -14,6 +15,7 @@ import consentFooter from "./src/plugins/consent-footer";
  * scripts/VERSIONING.md. Until the first release snapshot is created this list
  * stays empty — an empty list leaves the site single-version with no switcher.
  */
+/** @type {import("starlight-versions").StarlightVersionsUserConfig["versions"]} */
 const DOC_VERSIONS = [
   { slug: "v0.34" },
   { slug: "v0.33" },
@@ -28,27 +30,29 @@ const DOC_VERSIONS = [
   { slug: "v0.24" },
   { slug: "v0.23" },
   { slug: "v0.22" },
-  { slug: "v0.21" },
-  { slug: "v0.20" },
-  { slug: "v0.19" },
-  { slug: "v0.18" },
-  { slug: "v0.17" },
-  { slug: "v0.16" },
-  { slug: "v0.15" },
-  { slug: "v0.14" },
-  { slug: "v0.13" },
-  { slug: "v0.12" },
-  { slug: "v0.11" },
-  { slug: "v0.10" },
-  { slug: "v0.9" },
-  { slug: "v0.8" },
-  { slug: "v0.7" },
-  { slug: "v0.6" },
-  { slug: "v0.5" },
-  { slug: "v0.4" },
-  { slug: "v0.3" },
-  { slug: "v0.2" },
-  { slug: "v0.1" },
+  // Legacy versions have far fewer pages, so the version selector sends them
+  // to /<slug>/docs/ instead of the same page (which would often 404).
+  { slug: "v0.21", redirect: "root" },
+  { slug: "v0.20", redirect: "root" },
+  { slug: "v0.19", redirect: "root" },
+  { slug: "v0.18", redirect: "root" },
+  { slug: "v0.17", redirect: "root" },
+  { slug: "v0.16", redirect: "root" },
+  { slug: "v0.15", redirect: "root" },
+  { slug: "v0.14", redirect: "root" },
+  { slug: "v0.13", redirect: "root" },
+  { slug: "v0.12", redirect: "root" },
+  { slug: "v0.11", redirect: "root" },
+  { slug: "v0.10", redirect: "root" },
+  { slug: "v0.9", redirect: "root" },
+  { slug: "v0.8", redirect: "root" },
+  { slug: "v0.7", redirect: "root" },
+  { slug: "v0.6", redirect: "root" },
+  { slug: "v0.5", redirect: "root" },
+  { slug: "v0.4", redirect: "root" },
+  { slug: "v0.3", redirect: "root" },
+  { slug: "v0.2", redirect: "root" },
+  { slug: "v0.1", redirect: "root" },
 ];
 
 /*
@@ -113,6 +117,15 @@ export default defineConfig({
             })]
           : []),
       ],
+      components: {
+        // Mobile menu: version and theme selectors above the page list.
+        Sidebar: "./src/components/docs/Sidebar.astro",
+        // Compact version selector (Latest + newest versions + "All versions…").
+        // Only when the versions plugin is loaded: the override reads its config.
+        ...(DOC_VERSIONS.length > 0
+          ? { ThemeSelect: "./src/components/docs/ThemeSelect.astro" }
+          : {}),
+      },
       sidebar: [
         { label: "Getting Started", items: [{ autogenerate: { directory: "docs/getting-started" } }] },
         { label: "Connect Clients", items: [{ autogenerate: { directory: "docs/connect" } }] },
@@ -121,5 +134,7 @@ export default defineConfig({
         { label: "Product", items: [{ autogenerate: { directory: "docs/product" } }] },
       ],
     }),
+    // "All versions" page linked from the version selector; needs the versions plugin.
+    ...(DOC_VERSIONS.length > 0 ? [allVersionsPage()] : []),
   ],
 });
