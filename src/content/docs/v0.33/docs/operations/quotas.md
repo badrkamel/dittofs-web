@@ -1,0 +1,95 @@
+---
+title: Quotas
+description: Per-share byte and inode quotas with soft/hard limits and grace periods.
+editUrl: https://github.com/marmos91/dittofs/edit/v0.33.0/docs/guide/quotas.md
+sidebar:
+  order: 2
+slug: v0.33/docs/operations/quotas
+---
+
+DittoFS enforces **per-identity** quotas on a share — by user, by group, or a
+default-user fallback — limiting both **bytes** and **inodes (file count)**. Each limit
+has a **soft** threshold, a **hard** ceiling, and a **grace** window between them.
+
+> Quotas are managed live on a running server via `dfsctl` (or the REST API). There is no
+> config-file or Kubernetes CRD form. The full reference is in
+> [Configuration § Shares](/v0.33/docs/getting-started/configuration#8-shares-exports).
+
+## Set a quota
+
+```bash
+# A user (by UID): 10 GiB / 100k files hard, soft at 8 GiB / 90k files,
+# 7-day grace (604800s) before the soft byte limit becomes hard.
+dfsctl quota set /export --scope user --id 1000 \
+    --limit-bytes 10GiB --soft-bytes 8GiB \
+    --limit-files 100000 --soft-files 90000 --grace-seconds 604800
+
+# A group (by GID): 50 GiB, no file-count limit.
+dfsctl quota set /export --scope group --id 2000 --limit-bytes 50GiB
+
+# Everyone without an explicit quota (fallback template):
+dfsctl quota set /export --scope default-user --limit-bytes 5GiB
+```
+
+Sizes accept binary units (`GiB`, `MiB`, …). Omit a flag to leave that dimension
+unlimited.
+
+## Inspect and remove
+
+```bash
+dfsctl quota list /export
+dfsctl quota remove /export --scope user --id 1000
+```
+
+## How enforcement works
+
+* **Soft → grace → hard.** When an identity crosses its soft threshold, a grace timer
+  starts; once the grace window elapses the soft limit is enforced as hard. Drop back
+  under soft and the timer resets. Default-user grace is tracked per-user and survives a
+  server restart.
+* **Most-specific wins.** A user is limited by its own quota if set, else its group's,
+  else the default-user fallback.
+* **Usage is by owner, within one share.** Bytes and inode counts are keyed by share and
+  by file owner UID/GID, and stored durably alongside the files they account for — updated
+  in the same transaction that writes the file, and read back at startup rather than
+  recomputed, so start-up cost does not grow with the number of files. A `chown` moves a file's
+  usage between identities. Shares that name the same metadata store are served by one
+  store instance, but their usage is still counted separately: one share's bytes never
+  count against another share's quota, and `df` on a share reports only that share.
+* **Best-effort.** Under heavy concurrent writes an identity may briefly exceed a limit
+  before usage catches up — normal for a userspace NFS/SMB server.
+
+Quota limits live in the control-plane database and are also reachable via the REST API
+at `/api/v1/shares/{name}/quotas`.
+
+## Repairing a drifted usage figure
+
+Usage counters are maintained transactionally as files are written and removed, so they
+are normally already correct. If a share reports more bytes than its files hold — most
+visibly, it refuses writes while `dfsctl share list` shows it far from full — first check
+whether the counters really disagree with the file rows:
+
+```bash
+dfsctl store metadata recompute-usage /export --dry-run
+```
+
+A dry run derives the same figures, changes nothing, and names every usage bucket whose
+counter disagrees with the rows, with both numbers, so you can see how far apart they are
+and in which direction. A `share` row compares the share's own total rather than one
+owner's bucket — that total is what a share quota is checked against and what `df`
+reports, and it can drift on its own.
+
+Against a store that is taking writes a dry run reports small transient deltas: the rows
+and the counters are read at different instants. Drift from a bug does not look like that
+— it persists across runs and does not track live traffic.
+
+Then rebuild the counters from the file rows:
+
+```bash
+dfsctl store metadata recompute-usage /export
+```
+
+The rebuild scans every file row in the metadata store, so it takes time in proportion to
+the store's size, and it repairs every share that store serves rather than only the one
+named. Nothing runs it automatically: a per-file walk on every server start would be a
+cost every share pays forever to correct a number that is almost always already right.

@@ -2,9 +2,9 @@
 
 The website serves **two kinds** of docs:
 
-- **Latest** — `dittofs.io/docs/*`, vendored from the `develop` branch of the
-  main repo. This is what `scripts/sync-docs.mjs` writes by default, into
-  `src/content/docs/docs/**`.
+- **Latest**: `dittofs.io/docs/*`, vendored from the newest stable release
+  tag (`vX.Y.Z`, no suffix) of the main repo into `src/content/docs/docs/**`.
+  The version switcher labels it with that release, e.g. "Latest (v0.34)".
 - **Pinned snapshots** — `dittofs.io/<version>/docs/*` (e.g. `/v0.22/docs/...`),
   frozen copies of a released tag's docs. These live under
   `src/content/docs/<version>/**` and are managed by the
@@ -12,6 +12,26 @@ The website serves **two kinds** of docs:
 
 A version switcher appears in the Starlight sidebar once at least one version
 is configured in `DOC_VERSIONS` (see `astro.config.mjs`).
+
+## How Latest is refreshed
+
+The `Refresh docs` workflow (`.github/workflows/refresh-docs.yml`) syncs Latest
+and opens a PR on change. It runs only on `workflow_dispatch` (there is no
+schedule, so Latest never moves to a branch head):
+
+- The dittofs release workflow dispatches it with `ref=<tag>` for every stable
+  release (pre-release tags are skipped there).
+- A manual dispatch can pass `ref=vX.Y.Z`, or leave it empty to use the newest
+  stable tag (the latest GitHub release of dittofs).
+
+The workflow clones that tag and runs `sync-docs` with
+`DITTOFS_DOCS_REF=<tag>`. `sync-docs` records the tag in
+`src/data/latest-docs.json`, which `astro.config.mjs` reads to build the
+Latest label. A sync from a non-release ref (e.g. a local develop checkout)
+labels it plain "Latest".
+
+Links in Latest: "Edit page" links point at `develop` (where PRs land); links
+to other files in the main repo point at the synced tag.
 
 ## How snapshotting works
 
@@ -26,7 +46,7 @@ Because the plugin **copies the current latest tree verbatim**, the snapshot
 inherits whatever was vendored into `/docs` at archive time — including each
 page's `editUrl`. So to get a snapshot whose "Edit page" links point at the
 release tag, vendor the latest tree from the tag *with editUrls pinned to the
-tag* before archiving, then return latest to develop afterwards.
+tag* before archiving, then return latest to its normal sync afterwards.
 
 ## Snapshot a new release (e.g. cutting `v0.22`)
 
@@ -52,26 +72,20 @@ DITTOFS_DOCS_EDITREF=v0.22.0 \
 #    src/content/versions/v0.22.json on first run.
 npm run build      # (or `npm run dev`, then stop it once it boots)
 
-# 4. Return the LATEST tree to develop so /docs tracks bleeding-edge again
-#    (and its editUrls point back at develop).
-DITTOFS_REPO_DIR=../dittofs DITTOFS_DOCS_REF=develop npm run sync-docs
-#    …or, with a develop checkout on disk:
-#    DITTOFS_DOCS_DIR=../dittofs/docs npm run sync-docs
+# 4. Return the LATEST tree to the newest stable tag (its editUrls point back
+#    at develop). Use the newest stable tag, which may be newer than the one
+#    you just snapshotted.
+DITTOFS_REPO_DIR=../dittofs DITTOFS_DOCS_REF=v0.34.0 npm run sync-docs
 
 # 5. Build once more and commit the snapshot + manifest + config + latest docs.
 npm run build
-git add src/content/docs src/content/versions astro.config.mjs public/docs-assets
+git add src/content/docs src/content/versions src/data astro.config.mjs public/docs-assets
 git commit -S -m "docs: snapshot v0.22"
 ```
 
 The version slug is `v0.22` (minor-level) by intent: patch releases reuse the
 same docs snapshot. Use the bare `vX.Y` form so URLs read `/v0.22/docs/...`;
 the matching git tag is `vX.Y.0` (used for `DITTOFS_DOCS_REF` / editUrls).
-
-> Note: until the `docs/overhaul` audience-first layout merges to `develop`,
-> vendor "latest" from `DITTOFS_DOCS_REF=docs/overhaul` in step 4 instead of
-> `develop`. Once merged, plain `develop` (or the default `../dittofs/docs`)
-> is correct.
 
 ## MDX compatibility (why sync-docs normalizes content)
 
@@ -101,4 +115,4 @@ If a future doc adds another MDX-hostile construct in prose, extend
 | `DITTOFS_DOCS_VERSION`  | Write into `src/content/docs/<version>/docs/**` directly. Escape hatch only — normal snapshots are created by the plugin (this path does not add the `slug:` frontmatter the plugin needs for routing). |
 
 Default (no env vars): source `../dittofs/docs`, output the latest `/docs` tree
-with develop editUrls.
+with develop editUrls and source links, labelled plain "Latest".
