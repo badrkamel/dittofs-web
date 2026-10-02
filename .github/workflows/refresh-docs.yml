@@ -1,10 +1,15 @@
 name: Refresh docs
 
-# Keeps the vendored docs in sync with the dittofs repo. Opens a PR on change.
+# Keeps the vendored Latest docs in sync with the newest stable dittofs release.
+# Opens a PR on change. Dispatched by the dittofs release workflow with the
+# released tag; a manual dispatch without a ref uses the newest stable tag.
 on:
-  schedule:
-    - cron: "0 6 * * 1" # Mondays 06:00 UTC
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Stable dittofs tag to sync Latest from (vX.Y.Z). Empty: newest stable tag."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -20,18 +25,40 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Resolve dittofs tag
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          REF="${INPUT_REF}"
+
+          # No tag given: use GitHub's latest release (never a pre-release or draft).
+          if [[ -z "${REF}" ]]; then
+            REF="$(gh release view --repo marmos91/dittofs --json tagName --jq .tagName)"
+          fi
+
+          # Only accept stable tags like v0.34.0 (rejects branches and v0.35.0-rc1).
+          STABLE_TAG='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          if [[ ! "${REF}" =~ ${STABLE_TAG} ]]; then
+            echo "::error::'${REF}' is not a stable tag like v0.34.0."
+            exit 1
+          fi
+
+          echo "Syncing Latest from ${REF}"
+          echo "ref=${REF}" >> "$GITHUB_OUTPUT"
       - name: Clone dittofs docs
-        run: git clone --depth 1 https://github.com/marmos91/dittofs.git /tmp/dittofs
+        run: git clone --depth 1 --branch "${{ steps.ref.outputs.ref }}" https://github.com/marmos91/dittofs.git /tmp/dittofs
       - name: Sync docs
-        run: DITTOFS_DOCS_DIR=/tmp/dittofs/docs npm run sync-docs
+        run: DITTOFS_REPO_DIR=/tmp/dittofs DITTOFS_DOCS_REF="${{ steps.ref.outputs.ref }}" npm run sync-docs
       - name: Open PR on change
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "docs: sync from dittofs"
-          title: "docs: sync from dittofs"
+          commit-message: "docs: sync from dittofs ${{ steps.ref.outputs.ref }}"
+          title: "docs: sync from dittofs ${{ steps.ref.outputs.ref }}"
           branch: docs/auto-sync
           delete-branch: true
           # Request a review so the sync PR surfaces as a notification rather than
           # sitting unnoticed until someone happens to look at the PR list.
           reviewers: marmos91
-          body: Automated documentation sync from the dittofs repository.
+          body: Automated documentation sync from the dittofs repository, tag ${{ steps.ref.outputs.ref }}.

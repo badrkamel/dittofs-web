@@ -3,6 +3,7 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import starlight from "@astrojs/starlight";
 import starlightVersions from "starlight-versions";
+import { readFileSync } from "node:fs";
 import docsImages from "./integrations/docs-images.mjs";
 
 /*
@@ -15,6 +16,22 @@ import docsImages from "./integrations/docs-images.mjs";
 const DOC_VERSIONS = [
   { slug: "v0.22" },
 ];
+
+/*
+ * Label for the Latest docs. scripts/sync-docs.mjs writes the ref Latest was
+ * synced from to src/data/latest-docs.json. A release tag shows its minor
+ * ("v0.34.0" -> "Latest (v0.34)"); anything else, or no file, shows "Latest".
+ */
+function latestDocsLabel() {
+  let ref;
+  try {
+    ({ ref } = JSON.parse(readFileSync("./src/data/latest-docs.json", "utf8")));
+  } catch {
+    return "Latest";
+  }
+  const isReleaseTag = /^v\d+\.\d+\.\d+$/.test(ref);
+  return isReleaseTag ? `Latest (${ref.split(".").slice(0, 2).join(".")})` : "Latest";
+}
 
 // Canonical site URL. Overridable per-environment (preview deploys, etc.).
 const SITE = process.env.PUBLIC_SITE_URL || "https://dittofs.io";
@@ -65,7 +82,10 @@ export default defineConfig({
       // DOC_VERSIONS to enable it. See scripts/VERSIONING.md.
       plugins:
         DOC_VERSIONS.length > 0
-          ? [starlightVersions({ versions: DOC_VERSIONS })]
+          ? [starlightVersions({
+              current: { label: latestDocsLabel() },
+              versions: DOC_VERSIONS,
+            })]
           : [],
       sidebar: [
         { label: "Getting Started", items: [{ autogenerate: { directory: "docs/getting-started" } }] },
