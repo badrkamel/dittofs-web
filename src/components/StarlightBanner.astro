@@ -1,5 +1,7 @@
 ---
-import Default from "starlight-versions/overrides/Banner.astro";
+import Default from "@astrojs/starlight/components/Banner.astro";
+import VersionBanner from "starlight-versions/components/VersionBanner.astro";
 import VersionNavigation from "./VersionNavigation.astro";
 ---
-<VersionNavigation><Default {...Astro.props}><slot /></Default></VersionNavigation>
+<VersionNavigation><VersionBanner /></VersionNavigation>
+<Default {...Astro.props}><slot /></Default>

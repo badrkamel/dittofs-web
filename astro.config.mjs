@@ -108,13 +108,13 @@ export default defineConfig({
             },
           ]
         : [],
-      customCss: ["./src/styles/starlight.css"],
       components: {
         ThemeSelect: "./src/components/StarlightThemeSelect.astro",
         Search: "./src/components/StarlightSearch.astro",
         PageTitle: "./src/components/StarlightPageTitle.astro",
         Banner: "./src/components/StarlightBanner.astro",
       },
+      customCss: ["./src/styles/starlight.css"],
       // The versions plugin requires at least one version; until the first
       // release snapshot is cut, DOC_VERSIONS is empty and we omit the plugin
       // (the site stays single-version, no switcher). Add a slug to

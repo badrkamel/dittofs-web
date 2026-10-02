@@ -1,7 +1,7 @@
 import { getCollection } from "astro:content";
 
 async function loadRoutes() {
-  const entries = await getCollection("docs", ({ data }) => !data.draft);
+  const entries = await getCollection("docs", ({ data }) => !data.draft || import.meta.env.MODE !== "production");
   return new Set(entries.map(({ id }) => `/${id.replace(/\/$/, "")}`));
 }
 
