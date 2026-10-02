@@ -225,19 +225,42 @@ const KEEP_HTML_TAGS = new Set([
 ]);
 
 // Astro's plain-markdown build is lenient, but the starlight-versions snapshot
-// pipeline re-parses every doc as MDX. Two markdown constructs that are legal
+// pipeline re-parses every doc as MDX. Four markdown constructs that are legal
 // in CommonMark but blow up MDX must be normalized at vendor time so both the
 // latest build and the version snapshots succeed:
-//   1. GFM autolinks <https://…/…> — MDX reads the `/` as a JSX tag name.
-//   2. Angle-bracket placeholders in prose like <command>, <path>, <name> —
+//   1. HTML comments <!-- ... -->: MDX only accepts {/* ... */}. They are
+//      invisible to readers anyway, so they are dropped.
+//   2. GFM autolinks <https://…/…> — MDX reads the `/` as a JSX tag name.
+//   3. Angle-bracket placeholders in prose like <command>, <path>, <name> —
 //      MDX reads them as JSX and acorn fails on the (empty/invalid) expression.
+//   4. Any other "<" in prose that can't start a tag, like "(<1024)" or
+//      "<= 1 GiB": MDX reads it as a JSX tag and fails.
 // Both are only normalized OUTSIDE fenced code blocks and inline code spans,
 // so literal samples stay intact.
 function normalizeForMdx(md) {
   let inFence = false;
+  let inComment = false;
+
   return md
     .split("\n")
     .map((line) => {
+      // 1. Drop HTML comments (<!-- ... -->), which MDX can't parse.
+      //    They may span several lines, so track whether we're inside one.
+      if (inComment) {
+        const end = line.indexOf("-->");
+        if (end === -1) return "";
+        inComment = false;
+        line = line.slice(end + 3);
+      }
+      if (!inFence) {
+        line = line.replace(/<!--.*?-->/g, "");
+        const start = line.indexOf("<!--");
+        if (start !== -1) {
+          inComment = true;
+          line = line.slice(0, start);
+        }
+      }
+
       const fenceMatch = line.match(/^\s*(```|~~~)/);
       if (fenceMatch) {
         inFence = !inFence;
@@ -252,17 +275,17 @@ function normalizeForMdx(md) {
         return ` ${spans.length - 1} `;
       });
 
-      // 1. Autolinks -> explicit markdown links.
+      // 2. Autolinks -> explicit markdown links.
       work = work.replace(
         /<((?:https?|mailto):[^ <>]+)>/g,
         (_m, url) => `[${url}](${url})`,
       );
 
-      // 1b. Escape bare curly braces — MDX reads {…} / ${…} as JS expressions
+      // 2b. Escape bare curly braces — MDX reads {…} / ${…} as JS expressions
       //     and acorn throws on the embedded CLI --help / JSON dumps.
       work = work.replace(/[{}]/g, (c) => (c === "{" ? "&#123;" : "&#125;"));
 
-      // 2. Escape angle-bracket placeholders that are not real HTML tags.
+      // 3. Escape angle-bracket placeholders that are not real HTML tags.
       work = work.replace(
         /<\/?([A-Za-z][A-Za-z0-9_-]*)(\s[^<>]*)?\/?>/g,
         (m, tag) => {
@@ -271,6 +294,11 @@ function normalizeForMdx(md) {
           return m.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         },
       );
+
+      // 4. Escape any other "<" that can't start an HTML tag or comment,
+      //    e.g. "(<1024)" or "<= 1 GiB". MDX reads "<" as the start of a JSX
+      //    tag and fails when the next character can't start a tag name.
+      work = work.replace(/<(?![A-Za-z/])/g, "&lt;");
 
       // Restore inline code spans.
       return work.replace(/ (\d+) /g, (_m, i) => spans[Number(i)]);
