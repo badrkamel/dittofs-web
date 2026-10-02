@@ -19,7 +19,7 @@
  *     (src/content/docs/<version>/docs/**) instead of the latest tree. See
  *     scripts/VERSIONING.md for the release-snapshot workflow.
  *
- * Run manually or from the scheduled "refresh-docs" GitHub Action:
+ * Run manually or from the "refresh-docs" GitHub Action:
  *   DITTOFS_DOCS_DIR=/path/to/dittofs/docs npm run sync-docs
  *
  * The build (`astro build`) does NOT run this; the synced markdown is
@@ -35,6 +35,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 
 const DOCS_REF = process.env.DITTOFS_DOCS_REF || "";
+// Ref the docs came from (DITTOFS_DOCS_REF, else develop): used for links to
+// other repo files and, for the latest tree, written to LATEST_META so
+// astro.config.mjs can label Latest.
+const SOURCE_REF = DOCS_REF || "develop";
 const REPO_DIR =
   process.env.DITTOFS_REPO_DIR || path.resolve(ROOT, "..", "dittofs");
 
@@ -71,6 +75,7 @@ const OUT_DIR = DOCS_VERSION
   ? path.join(CONTENT_BASE, DOCS_VERSION, "docs")
   : path.join(CONTENT_BASE, "docs");
 const ASSET_OUT = path.resolve(ROOT, "public", "docs-assets");
+const LATEST_META = path.resolve(ROOT, "src", "data", "latest-docs.json");
 
 // Route prefix used when rewriting intra-doc links. Versioned snapshots are
 // served under /<version>/docs/*; latest under /docs/*.
@@ -200,7 +205,7 @@ const ROUTE_BY_FILE = new Map(
 );
 
 const GITHUB_REPO = "https://github.com/marmos91/dittofs";
-const GITHUB_BLOB = `${GITHUB_REPO}/blob/develop`;
+const GITHUB_BLOB = `${GITHUB_REPO}/blob/${SOURCE_REF}`;
 
 function escapeYaml(s) {
   return s.replace(/"/g, '\\"');
@@ -372,6 +377,7 @@ async function main() {
 
   console.log(`Syncing docs from: ${SRC_DIR}`);
   console.log(`Writing to:        ${OUT_DIR}`);
+  console.log(`Source ref:        ${SOURCE_REF}`);
   if (DOCS_VERSION) console.log(`Version snapshot:  ${DOCS_VERSION}`);
   let written = 0;
 
@@ -390,7 +396,7 @@ async function main() {
     body = rewriteLinksAndAssets(body, doc.src);
 
     // Point "Edit page" at the real source in the main repo, not this site's
-    // vendored copy. Pin snapshots to their tag; latest tracks develop.
+    // vendored copy. Pin snapshots to their tag; latest edits go to develop.
     const editRef =
       process.env.DITTOFS_DOCS_EDITREF ||
       (DOCS_VERSION ? `${DOCS_VERSION}.0` : "develop");
@@ -413,6 +419,16 @@ async function main() {
   }
 
   await copyAssets();
+
+  if (!DOCS_VERSION) {
+    await fs.mkdir(path.dirname(LATEST_META), { recursive: true });
+    await fs.writeFile(
+      LATEST_META,
+      JSON.stringify({ ref: SOURCE_REF }, null, 2) + "\n",
+      "utf8",
+    );
+    console.log(`  + ${path.relative(ROOT, LATEST_META)}  (ref ${SOURCE_REF})`);
+  }
 
   console.log(
     `\nDone. ${written}/${DOCS.length} docs synced, ${usedAssets.size} assets copied.`,
