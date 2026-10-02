@@ -148,12 +148,13 @@ test("sync writes matching edit/fallback refs and copies assets", async (t) => {
 
 test("published conformance and operator links target the matching repository version", async () => {
   const content = new URL("../src/content/docs/", import.meta.url);
+  const { ref: latestRef } = JSON.parse(await fs.readFile(new URL("../src/data/latest-docs.json", import.meta.url), "utf8"));
   const latest = await fs.readFile(new URL("docs/contributing/testing.md", content), "utf8");
-  assert.ok(latest.includes(`](${GITHUB_REPO}/blob/develop/test/conformance/suites.json)`));
-  assert.ok(latest.includes(`](${GITHUB_REPO}/blob/develop/test/conformance/run.sh)`));
+  assert.ok(latest.includes(`](${GITHUB_REPO}/blob/${latestRef}/test/conformance/suites.json)`));
+  assert.ok(latest.includes(`](${GITHUB_REPO}/blob/${latestRef}/test/conformance/run.sh)`));
   const release = await fs.readFile(new URL("v0.22/docs/contributing/testing.md", content), "utf8");
   assert.ok(release.includes(`](${GITHUB_REPO}/blob/v0.22.0/test/smb-conformance/smbtorture/KNOWN_FAILURES.md)`));
-  for (const [prefix, ref] of [["docs", "develop"], ["v0.22/docs", "v0.22.0"]]) {
+  for (const [prefix, ref] of [["docs", latestRef], ["v0.22/docs", "v0.22.0"]]) {
     const install = await fs.readFile(new URL(`${prefix}/getting-started/install.md`, content), "utf8");
     assert.ok(install.includes(`](${GITHUB_REPO}/tree/${ref}/k8s/dittofs-operator/)`));
   }
