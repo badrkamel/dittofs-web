@@ -509,7 +509,7 @@ Permission levels: `none`, `read`, `read-write`, `admin` (future).
 Resolution order: user explicit permission → group permission → share default.
 
 For the full user management reference (LDAP/AD idmap, password hash format, per-share
-defaults), see [./configuration.md#user-management](/v0.22/docs/getting-started/configuration#9-user-management).
+defaults), see [./configuration.md#9-user-management](/v0.22/docs/getting-started/configuration#9-user-management).
 
 ***
 

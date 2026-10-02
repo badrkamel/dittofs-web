@@ -3,6 +3,8 @@ import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import starlight from "@astrojs/starlight";
 import starlightVersions from "starlight-versions";
+import { readFileSync } from "node:fs";
+import docsImages from "./integrations/docs-images.mjs";
 
 /*
  * Documentation versions. The latest docs are served at /docs/* (no entry
@@ -12,8 +14,57 @@ import starlightVersions from "starlight-versions";
  * stays empty — an empty list leaves the site single-version with no switcher.
  */
 const DOC_VERSIONS = [
+  { slug: "v0.34" },
+  { slug: "v0.33" },
+  { slug: "v0.32" },
+  { slug: "v0.31" },
+  { slug: "v0.30" },
+  { slug: "v0.29" },
+  { slug: "v0.28" },
+  { slug: "v0.27" },
+  { slug: "v0.26" },
+  { slug: "v0.25" },
+  { slug: "v0.24" },
+  { slug: "v0.23" },
   { slug: "v0.22" },
+  { slug: "v0.21" },
+  { slug: "v0.20" },
+  { slug: "v0.19" },
+  { slug: "v0.18" },
+  { slug: "v0.17" },
+  { slug: "v0.16" },
+  { slug: "v0.15" },
+  { slug: "v0.14" },
+  { slug: "v0.13" },
+  { slug: "v0.12" },
+  { slug: "v0.11" },
+  { slug: "v0.10" },
+  { slug: "v0.9" },
+  { slug: "v0.8" },
+  { slug: "v0.7" },
+  { slug: "v0.6" },
+  { slug: "v0.5" },
+  { slug: "v0.4" },
+  { slug: "v0.3" },
+  { slug: "v0.2" },
+  { slug: "v0.1" },
 ];
+
+/*
+ * Label for the Latest docs. scripts/sync-docs.mjs writes the ref Latest was
+ * synced from to src/data/latest-docs.json. A release tag shows its minor
+ * ("v0.34.0" -> "Latest (v0.34)"); anything else, or no file, shows "Latest".
+ */
+function latestDocsLabel() {
+  let ref;
+  try {
+    ({ ref } = JSON.parse(readFileSync("./src/data/latest-docs.json", "utf8")));
+  } catch {
+    return "Latest";
+  }
+  const isReleaseTag = /^v\d+\.\d+\.\d+$/.test(ref);
+  return isReleaseTag ? `Latest (${ref.split(".").slice(0, 2).join(".")})` : "Latest";
+}
 
 // Canonical site URL. Overridable per-environment (preview deploys, etc.).
 const SITE = process.env.PUBLIC_SITE_URL || "https://dittofs.io";
@@ -27,6 +78,7 @@ export default defineConfig({
   site: SITE,
   integrations: [
     react(),
+    docsImages(),
     starlight({
       title: "DittoFS",
       description:
@@ -57,13 +109,21 @@ export default defineConfig({
           ]
         : [],
       customCss: ["./src/styles/starlight.css"],
+      components: {
+        ThemeSelect: "./src/components/StarlightThemeSelect.astro",
+        PageTitle: "./src/components/StarlightPageTitle.astro",
+        Banner: "./src/components/StarlightBanner.astro",
+      },
       // The versions plugin requires at least one version; until the first
       // release snapshot is cut, DOC_VERSIONS is empty and we omit the plugin
       // (the site stays single-version, no switcher). Add a slug to
       // DOC_VERSIONS to enable it. See scripts/VERSIONING.md.
       plugins:
         DOC_VERSIONS.length > 0
-          ? [starlightVersions({ versions: DOC_VERSIONS })]
+          ? [starlightVersions({
+              current: { label: latestDocsLabel() },
+              versions: DOC_VERSIONS,
+            })]
           : [],
       sidebar: [
         { label: "Getting Started", items: [{ autogenerate: { directory: "docs/getting-started" } }] },

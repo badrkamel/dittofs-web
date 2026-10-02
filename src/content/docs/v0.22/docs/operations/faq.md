@@ -624,7 +624,7 @@ to use them via the standard Linux tools (`setfattr` / `getfattr`). Only the `us
 namespace is exposed, and values are stored inline up to 64 KiB (a larger value returns
 `NFS4ERR_XATTR2BIG`). The xattr namespace is shared with SMB extended attributes / named
 streams, so a value set over one protocol is readable over the other. See
-[NFS.md → NFSv4.2 Status](/v0.22/docs/connect/nfs#supported-versions) for details.
+[NFS.md → Supported Versions](/v0.22/docs/connect/nfs#supported-versions) for details.
 
 #### fallocate/posix\_fallocate
 

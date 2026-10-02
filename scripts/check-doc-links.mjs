@@ -18,6 +18,8 @@ export async function findBrokenDocLinks(directory, site = "https://dittofs.io")
       const attrs = Object.fromEntries((node.attrs || []).map(({ name, value }) => [name, value]));
       if (attrs.id) ids.add(attrs.id);
       if (node.tagName === "a" && attrs.href) links.push(attrs.href);
+      // Version selection navigates through option values, not anchor links.
+      if (node.tagName === "option" && attrs.value?.startsWith("/")) links.push(attrs.value);
       for (const child of node.childNodes || []) walk(child);
     }
     walk(parse(await fs.readFile(path.join(directory, file), "utf8")));

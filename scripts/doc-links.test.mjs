@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { docsGitRef, GITHUB_REPO, rewriteLinksAndAssets } from "./doc-links.mjs";
+import { docsGitRef, docsEditRef, GITHUB_REPO, rewriteLinksAndAssets } from "./doc-links.mjs";
 
 const routes = new Map([["docs/guide/configuration.md", "/docs/getting-started/configuration"]]);
 const rewrite = (md, options = {}) => rewriteLinksAndAssets(md, "internals/testing.md", { routes, ...options });
@@ -71,8 +71,13 @@ test("reference destinations, rich labels and escaped destinations keep valid Ma
   assert.equal(rewrite('![figure][image]\n\n[image]: diagram.png'), '![figure][image]\n\n[image]: /docs-assets/diagram.png');
 });
 
-test("one git ref is selected for edit links and repository fallback links", () => {
+test("source refs stay pinned while latest edits target develop", () => {
   assert.equal(docsGitRef({}), "develop");
+  assert.equal(docsEditRef({}), "develop");
+  assert.equal(docsEditRef({ DITTOFS_DOCS_REF: "v0.34.0" }), "develop");
+  assert.equal(docsEditRef({ DITTOFS_DOCS_VERSION: "v0.22" }), "v0.22.0");
+  assert.equal(docsEditRef({ DITTOFS_DOCS_EDITREF: "v0.22.2", DITTOFS_DOCS_VERSION: "v0.22" }), "v0.22.2");
+  assert.equal(docsGitRef({ DITTOFS_DOCS_REF: "v0.34.0", DITTOFS_DOCS_EDITREF: "develop" }), "v0.34.0");
   assert.equal(docsGitRef({ DITTOFS_DOCS_VERSION: "v0.22" }), "v0.22.0");
   assert.equal(docsGitRef({ DITTOFS_DOCS_REF: "v0.22.2", DITTOFS_DOCS_VERSION: "v0.22" }), "v0.22.2");
   assert.equal(docsGitRef({ DITTOFS_DOCS_REF: "v0.22.2" }), "v0.22.2");
@@ -94,7 +99,7 @@ test("sync writes matching edit/fallback refs and copies assets", async (t) => {
   await fs.mkdir(path.join(source, "assets"));
   await fs.writeFile(path.join(source, "assets", "diagram.png"), "image fixture");
   await fs.writeFile(path.join(source, "guide", "getting-started.md"), '# Start\n\n[run](../../test/run.sh)\n\n![diagram](../assets/diagram.png)\n\n```md\n[example](../../test/run.sh)\n```\n');
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("DITTOFS_DOCS_")));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("DITTOFS_")));
   execFileSync(process.execPath, [path.join(root, "scripts", "sync-docs.mjs")], {
     env: { ...env, DITTOFS_DOCS_DIR: source, DITTOFS_DOCS_EDITREF: "v0.22.0" },
     stdio: "pipe",
@@ -104,6 +109,41 @@ test("sync writes matching edit/fallback refs and copies assets", async (t) => {
   assert.match(result, /\[run\]\(https:\/\/github.com\/marmos91\/dittofs\/blob\/v0\.22\.0\/test\/run\.sh\)/);
   assert.ok(result.includes("```md\n[example](../../test/run.sh)\n```"));
   assert.equal(await fs.readFile(path.join(root, "public/docs-assets/diagram.png"), "utf8"), "image fixture");
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, "src/data/latest-docs.json"), "utf8")), { ref: "v0.22.0" });
+
+  // Exercise the release workflow through a real local tag, not just the ref
+  // selector. Latest is read from the tag and remains editable on develop.
+  const repo = path.join(root, "repo");
+  await fs.mkdir(repo);
+  await fs.cp(source, path.join(repo, "docs"), { recursive: true });
+  const git = (...args) => execFileSync("git", args, { cwd: repo, stdio: "pipe" });
+  git("init", "--quiet");
+  git("add", "docs");
+  git("-c", "user.name=Docs Test", "-c", "user.email=docs@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Fixture docs");
+  git("tag", "v0.34.0");
+  execFileSync(process.execPath, [path.join(root, "scripts/sync-docs.mjs")], {
+    env: { ...env, DITTOFS_REPO_DIR: repo, DITTOFS_DOCS_REF: "v0.34.0" }, stdio: "pipe",
+  });
+  const stable = await fs.readFile(path.join(root, "src/content/docs/docs/getting-started/getting-started.md"), "utf8");
+  assert.ok(stable.includes(`${GITHUB_REPO}/edit/develop/docs/guide/getting-started.md`));
+  assert.ok(stable.includes(`${GITHUB_REPO}/blob/v0.34.0/test/run.sh`));
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, "src/data/latest-docs.json"), "utf8")), { ref: "v0.34.0" });
+
+  // Legacy snapshots use a flat source layout and only map pages that exist.
+  const legacy = path.join(root, "legacy");
+  await fs.mkdir(legacy);
+  await fs.writeFile(path.join(legacy, "NFS.md"), "# NFS\n\n[CLI](CLI.md#usage) [SMB](SMB.md) [repo](../README.md)\n");
+  await fs.writeFile(path.join(legacy, "CLI.md"), "# CLI\n\n## Usage\n");
+  execFileSync(process.execPath, [path.join(root, "scripts/sync-docs.mjs")], {
+    env: { ...env, DITTOFS_DOCS_DIR: legacy, DITTOFS_DOCS_VERSION: "v0.1" }, stdio: "pipe",
+  });
+  const snapshot = await fs.readFile(path.join(root, "src/content/docs/v0.1/docs/connect/nfs.md"), "utf8");
+  assert.ok(snapshot.includes(`${GITHUB_REPO}/edit/v0.1.0/docs/NFS.md`));
+  assert.ok(snapshot.includes("[CLI](/v0.1/docs/getting-started/cli#usage)"));
+  assert.ok(snapshot.includes(`[SMB](${GITHUB_REPO}/blob/v0.1.0/docs/SMB.md)`));
+  assert.ok(snapshot.includes(`[repo](${GITHUB_REPO}/blob/v0.1.0/README.md)`));
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, "src/data/latest-docs.json"), "utf8")), { ref: "v0.34.0" });
+
 });
 
 test("published conformance and operator links target the matching repository version", async () => {

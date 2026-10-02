@@ -6,8 +6,14 @@ export const GITHUB_REPO = "https://github.com/marmos91/dittofs";
 
 // A checkout directory takes precedence over an archive ref as the source.
 export function docsGitRef(env = process.env) {
+  return (!env.DITTOFS_DOCS_DIR && env.DITTOFS_DOCS_REF) ||
+    env.DITTOFS_DOCS_EDITREF ||
+    (env.DITTOFS_DOCS_VERSION ? `${env.DITTOFS_DOCS_VERSION}.0` : "develop");
+}
+
+// Latest links to the stable source tag, but edits go to the development branch.
+export function docsEditRef(env = process.env) {
   return env.DITTOFS_DOCS_EDITREF ||
-    (!env.DITTOFS_DOCS_DIR && env.DITTOFS_DOCS_REF) ||
     (env.DITTOFS_DOCS_VERSION ? `${env.DITTOFS_DOCS_VERSION}.0` : "develop");
 }
 
