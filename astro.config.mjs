@@ -83,6 +83,12 @@ export default defineConfig({
       title: "DittoFS",
       description:
         "Modular virtual filesystem in Go. NFS and SMB in userspace, with pluggable storage.",
+      components: {
+        ThemeSelect: "./src/components/StarlightThemeSelect.astro",
+        Search: "./src/components/StarlightSearch.astro",
+        PageTitle: "./src/components/StarlightPageTitle.astro",
+        Banner: "./src/components/StarlightBanner.astro",
+      },
       logo: {
         // light theme -> black-ink wordmark; dark theme -> white-ink wordmark.
         light: "./src/assets/logo-dark.svg",
@@ -108,12 +114,6 @@ export default defineConfig({
             },
           ]
         : [],
-      components: {
-        ThemeSelect: "./src/components/StarlightThemeSelect.astro",
-        Search: "./src/components/StarlightSearch.astro",
-        PageTitle: "./src/components/StarlightPageTitle.astro",
-        Banner: "./src/components/StarlightBanner.astro",
-      },
       customCss: ["./src/styles/starlight.css"],
       // The versions plugin requires at least one version; until the first
       // release snapshot is cut, DOC_VERSIONS is empty and we omit the plugin
