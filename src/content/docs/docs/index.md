@@ -18,24 +18,27 @@ formats may change.
 
 ## Key concepts
 
-- **Protocol adapters** — NFS and SMB can run at the same time on one server.
-- **Control plane** — central management of users, groups, shares, and
+- **Protocol adapters**: NFS and SMB can run at the same time on one server.
+- **Control plane**: central management of users, groups, shares, and
   configuration through a REST API.
-- **Shares** — the export points clients mount, each referencing specific
+- **Shares**: the paths clients mount over NFS or SMB, each referencing specific
   stores.
-- **Named store registry** — reusable store instances shared across exports.
-- **Pluggable storage** — mix metadata stores (memory, BadgerDB, PostgreSQL)
+- **Named store registry**: store instances defined once and reused by several
+  shares.
+- **Pluggable storage**: mix metadata stores (memory, BadgerDB, PostgreSQL)
   and block stores (filesystem, S3) per share.
 
 ## Where to go next
 
-- [Getting started](/docs/getting-started/getting-started/) — install the
+- [Getting started](/docs/getting-started/getting-started/): install the
   server and mount your first share.
-- [Configuration](/docs/getting-started/configuration/) — server config and
+- [Configuration](/docs/getting-started/configuration/): server config and
   store management.
-- [CLI reference](/docs/getting-started/cli/) — every `dfs` and `dfsctl`
+- [CLI reference](/docs/getting-started/cli/): every `dfs` and `dfsctl`
   command.
-- [NFS](/docs/connect/nfs/) and [SMB](/docs/connect/smb/) — protocol details
+- [NFS](/docs/connect/nfs/) and [SMB](/docs/connect/smb/): protocol details
   and client usage.
-- [Architecture](/docs/contributing/architecture/) — how the pieces fit
+- [Windows clients](/docs/connect/windows/): connect a Windows client over SMB.
+- [Identity](/docs/connect/identity/): AD, LDAP and Kerberos.
+- [Architecture](/docs/contributing/architecture/): how the pieces fit
   together (for contributors).
