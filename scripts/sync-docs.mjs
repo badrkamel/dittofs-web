@@ -25,7 +25,7 @@
  * The build (`astro build`) does NOT run this; the synced markdown is
  * committed so Cloudflare builds stay hermetic.
  */
-import { promises as fs, mkdtempSync } from "node:fs";
+import { promises as fs, mkdtempSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -94,6 +94,83 @@ const ROUTE_PREFIX = DOCS_VERSION ? `/${DOCS_VERSION}/docs` : "/docs";
  *   contributing     Contributing (internals)
  *   product          Product
  */
+/*
+ * Legacy layout (v0.1 to v0.21): flat docs/UPPERCASE.md files, before the
+ * docs/guide + docs/internals split. Used automatically when the source has
+ * no guide/ dir. Entries whose file doesn't exist in a given version are
+ * skipped, so each version only gets the pages it actually had.
+ */
+const LEGACY_DOCS = [
+  // ---- Getting Started ----
+  { src: "DEPLOYMENT.md", group: "getting-started", slug: "install", order: 2,
+    title: "Install & Deploy", description: "Deployment options for DittoFS." },
+  { src: "CONFIGURATION.md", group: "getting-started", slug: "configuration", order: 3,
+    title: "Configuration", description: "Server configuration file and environment variables." },
+  { src: "CLI.md", group: "getting-started", slug: "cli", order: 5,
+    title: "CLI Reference", description: "Reference for the dfs and dfsctl commands." },
+
+  // ---- Connect Clients ----
+  { src: "NFS.md", group: "connect", slug: "nfs", order: 1,
+    title: "NFS", description: "Serving NFS and mounting from clients." },
+  { src: "SMB.md", group: "connect", slug: "smb", order: 2,
+    title: "SMB", description: "Serving SMB and mounting from clients." },
+  { src: "AD_LDAP_KERBEROS.md", group: "connect", slug: "identity", order: 4,
+    title: "Identity (AD / LDAP / Kerberos)", description: "Directory services and Kerberos." },
+  { src: "ACLS.md", group: "connect", slug: "access-control", order: 5,
+    title: "Access Control", description: "ACLs and permissions." },
+
+  // ---- Features & Operations ----
+  { src: "SNAPSHOTS.md", group: "operations", slug: "snapshots", order: 1,
+    title: "Snapshots", description: "Share snapshots." },
+  { src: "ENCRYPTION.md", group: "operations", slug: "encryption", order: 3,
+    title: "Encryption", description: "Data encryption." },
+  { src: "SECURITY.md", group: "operations", slug: "security", order: 4,
+    title: "Security", description: "Security model and hardening." },
+  { src: "BLOCKSTORE_MIGRATION.md", group: "operations", slug: "block-store-migration", order: 5,
+    title: "Block Store Migration", description: "Migrating block store layouts." },
+  { src: "BACKUP.md", group: "operations", slug: "backup", order: 6,
+    title: "Backup", description: "Backing up DittoFS." },
+  { src: "API_AUTHENTICATION.md", group: "operations", slug: "api-authentication", order: 7,
+    title: "API Authentication", description: "Control plane API authentication." },
+  { src: "TROUBLESHOOTING.md", group: "operations", slug: "troubleshooting", order: 8,
+    title: "Troubleshooting", description: "Common issues and fixes." },
+  { src: "KNOWN_LIMITATIONS.md", group: "operations", slug: "known-limitations", order: 9,
+    title: "Known Limitations", description: "Current limitations." },
+  { src: "FAQ.md", group: "operations", slug: "faq", order: 10,
+    title: "FAQ", description: "Frequently asked questions." },
+  { src: "GLOSSARY.md", group: "operations", slug: "glossary", order: 11,
+    title: "Glossary", description: "Terms used in DittoFS." },
+
+  // ---- Contributing ----
+  { src: "ARCHITECTURE.md", group: "contributing", slug: "architecture", order: 1,
+    title: "Architecture", description: "How the pieces fit together." },
+  { src: "NFS_PROTOCOL_GUIDE.md", group: "contributing", slug: "nfs-protocol", order: 2,
+    title: "NFS Protocol Internals", description: "NFS implementation details." },
+  { src: "SMB_PROTOCOL_GUIDE.md", group: "contributing", slug: "smb-protocol", order: 3,
+    title: "SMB Protocol Internals", description: "SMB implementation details." },
+  { src: "IMPLEMENTING_STORES.md", group: "contributing", slug: "implementing-stores", order: 4,
+    title: "Implementing Stores", description: "Writing a metadata or block store." },
+  { src: "CACHE.md", group: "contributing", slug: "cache", order: 5,
+    title: "Cache", description: "Cache design." },
+  { src: "PAYLOAD.md", group: "contributing", slug: "payload", order: 6,
+    title: "Payload", description: "Payload handling." },
+  { src: "WINDOWS_TESTING.md", group: "contributing", slug: "testing", order: 7,
+    title: "Testing", description: "Windows testing setup." },
+  { src: "DEBUGGING.md", group: "contributing", slug: "debugging", order: 8,
+    title: "Debugging", description: "Debugging DittoFS." },
+
+  // ---- Product ----
+  { src: "PRO.md", group: "product", slug: "pro", order: 1,
+    title: "DittoFS Pro", description: "DittoFS Pro." },
+];
+
+// Pick the layout from the source tree: no guide/ dir means the legacy layout.
+// Only keep entries whose source file exists in this version.
+const IS_LEGACY = !existsSync(path.join(SRC_DIR, "guide"));
+const ACTIVE_DOCS = (IS_LEGACY ? LEGACY_DOCS : DOCS).filter((d) =>
+  existsSync(path.join(SRC_DIR, d.src)),
+);
+
 const DOCS = [
   // ---- Getting Started ----
   { src: "guide/getting-started.md", group: "getting-started", slug: "getting-started", order: 1,
@@ -198,7 +275,7 @@ const DOCS = [
 // keying by basename makes them resolve regardless of the relative prefix.
 // Basenames are unique across the curated set.
 const ROUTE_BY_FILE = new Map(
-  DOCS.map((d) => [
+  ACTIVE_DOCS.map((d) => [
     path.basename(d.src).toLowerCase(),
     `${ROUTE_PREFIX}/${d.group}/${d.slug}`,
   ]),
@@ -403,13 +480,23 @@ async function main() {
     process.exit(1);
   }
 
+  // Clear previously synced pages so a version never inherits pages from
+  // another one. Only the group dirs are cleared. Site-native pages (like the
+  // docs index) live outside them.
+  for (const group of ["getting-started", "connect", "operations", "contributing", "product"]) {
+    await fs.rm(path.join(OUT_DIR, group), { recursive: true, force: true });
+  }
+  if (IS_LEGACY) {
+    console.log("Layout:            legacy (flat docs/)");
+  }
+
   console.log(`Syncing docs from: ${SRC_DIR}`);
   console.log(`Writing to:        ${OUT_DIR}`);
   console.log(`Source ref:        ${SOURCE_REF}`);
   if (DOCS_VERSION) console.log(`Version snapshot:  ${DOCS_VERSION}`);
   let written = 0;
 
-  for (const doc of DOCS) {
+  for (const doc of ACTIVE_DOCS) {
     const srcPath = path.join(SRC_DIR, doc.src);
     let raw;
     try {
@@ -459,7 +546,7 @@ async function main() {
   }
 
   console.log(
-    `\nDone. ${written}/${DOCS.length} docs synced, ${usedAssets.size} assets copied.`,
+    `\nDone. ${written}/${ACTIVE_DOCS.length} docs synced, ${usedAssets.size} assets copied.`,
   );
 
   if (TMP_DIR) {
