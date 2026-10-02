@@ -1,0 +1,578 @@
+---
+title: Troubleshooting
+description: Common issues and fixes.
+editUrl: https://github.com/marmos91/dittofs/edit/v0.7.1/docs/TROUBLESHOOTING.md
+sidebar:
+  order: 8
+slug: v0.7/docs/operations/troubleshooting
+---
+
+This guide covers common issues and their solutions when working with DittoFS.
+
+## Table of Contents
+
+* [Connection Issues](#connection-issues)
+* [Mount Issues](#mount-issues)
+  * [SMB mount permission denied (macOS)](#smb-mount-permission-denied-macos)
+* [Permission Issues](#permission-issues)
+* [File Handle Issues](#file-handle-issues)
+* [Performance Issues](#performance-issues)
+* [Logging and Debugging](#logging-and-debugging)
+
+## Connection Issues
+
+### Cannot mount: Connection refused
+
+**Symptoms:**
+
+```
+mount.nfs: Connection refused
+```
+
+**Solutions:**
+
+1. **Check if DittoFS is running:**
+   ```bash
+   ps aux | grep dfs
+   ```
+
+2. **Verify the port is correct:**
+   ```bash
+   netstat -an | grep 12049
+   # or
+   lsof -i :12049
+   ```
+
+3. **Check firewall rules:**
+   ```bash
+   # Linux
+   sudo iptables -L | grep 12049
+
+   # macOS
+   sudo pfctl -s rules | grep 12049
+   ```
+
+4. **Verify configuration:**
+   ```bash
+   # Check the config file
+   cat ~/.config/dfs/config.yaml
+
+   # Start with debug logging
+   DITTOFS_LOGGING_LEVEL=DEBUG ./dfs start
+   ```
+
+### Connection timeout
+
+**Symptoms:**
+
+```
+mount.nfs: Connection timed out
+```
+
+**Solutions:**
+
+1. **Check network connectivity:**
+   ```bash
+   ping localhost
+   telnet localhost 12049
+   ```
+
+2. **Review timeout settings in config:**
+   ```yaml
+   adapters:
+     nfs:
+       timeouts:
+         read: 5m
+         write: 30s
+         idle: 5m
+   ```
+
+## Mount Issues
+
+### Invalid file system
+
+**Symptoms:**
+
+```
+mount: /mnt/nfs: invalid file system.
+```
+
+**Cause:** The mount point directory does not exist.
+
+**Solution:** Create the mount point before mounting:
+
+```bash
+# Linux
+sudo mkdir -p /mnt/nfs
+sudo mount -t nfs -o tcp,port=12049,mountport=12049 localhost:/export /mnt/nfs
+
+# macOS (use /tmp since /mnt doesn't exist, sudo not required)
+mkdir -p /tmp/nfs
+mount -t nfs -o tcp,port=12049,mountport=12049 localhost:/export /tmp/nfs
+```
+
+### Permission denied when mounting
+
+**Symptoms:**
+
+```
+mount.nfs: access denied by server while mounting
+```
+
+**Solutions:**
+
+1. **On Linux, allow non-privileged ports:**
+   ```bash
+   sudo sysctl -w net.ipv4.ip_unprivileged_port_start=0
+   ```
+
+2. **On macOS, use resvport option:**
+   ```bash
+   sudo mount -t nfs -o tcp,port=12049,mountport=12049,resvport localhost:/export /mnt/test
+   ```
+
+3. **Check export configuration:**
+   ```yaml
+   shares:
+     - name: /export
+       allowed_clients:
+         - 192.168.1.0/24  # Make sure your IP is in this range
+       denied_clients: []
+   ```
+
+4. **Verify authentication settings:**
+   ```yaml
+   shares:
+     - name: /export
+       require_auth: false  # Set to false for development
+       allowed_auth_methods: [anonymous, unix]
+   ```
+
+### No such file or directory
+
+**Symptoms:**
+
+```
+mount.nfs: mounting localhost:/export failed, reason given by server: No such file or directory
+```
+
+**Solutions:**
+
+1. **Verify the export path exists in configuration:**
+   ```yaml
+   shares:
+     - name: /export  # This is the export path
+   ```
+
+2. **Check share names are correct:**
+   ```bash
+   # Mount using the exact share name from config
+   sudo mount -t nfs -o nfsvers=3,tcp,port=12049,mountport=12049 localhost:/export /mnt/test
+   ```
+
+### SMB mount permission denied (macOS)
+
+**Symptoms:**
+
+```
+zsh: permission denied: /tmp/smb-test/file.txt
+```
+
+This happens after mounting an SMB share, even with 0777 permissions.
+
+**Cause:** macOS has a security restriction where **only the mount owner can access files**,
+regardless of Unix permissions. This is enforced at a level below file permissions - no SMB
+traffic even reaches the server. Apple confirmed this is "works as intended".
+
+**Solution - use dfsctl (handles this automatically):**
+
+The `dfsctl share mount` command automatically handles this by using `sudo -u $SUDO_USER`
+to mount as your user instead of root:
+
+```bash
+# This works - mount owned by your user, not root
+sudo dfsctl share mount --protocol smb /export /mnt/share
+```
+
+**Alternative - mount to user directory without sudo:**
+
+```bash
+mkdir -p ~/mnt/share
+dfsctl share mount --protocol smb /export ~/mnt/share
+```
+
+**If using manual mount\_smbfs:**
+
+```bash
+# Mount as your user, not root
+sudo -u $USER mount_smbfs //user:pass@localhost:12445/export /mnt/share
+```
+
+**Note:** This is a macOS-specific issue. On Linux, `dfsctl share mount` uses uid/gid
+options which work correctly.
+
+See [Known Limitations](https://github.com/marmos91/dittofs/blob/v0.7.1/docs/KNOWN_LIMITATIONS.md#macos-mount-owner-only-access) for details.
+
+## Permission Issues
+
+### Permission denied on file operations
+
+**Symptoms:**
+
+```
+touch: cannot touch 'file.txt': Permission denied
+```
+
+**Solutions:**
+
+1. **Check identity mapping configuration:**
+   ```yaml
+   shares:
+     - name: /export
+       identity_mapping:
+         map_all_to_anonymous: true  # Try this for development
+         anonymous_uid: 65534
+         anonymous_gid: 65534
+   ```
+
+2. **Verify root directory permissions:**
+   ```yaml
+   shares:
+     - name: /export
+       root_attr:
+         mode: 0777  # Wide open for debugging
+         uid: 0
+         gid: 0
+   ```
+
+3. **Check your client UID/GID:**
+   ```bash
+   id  # Check your UID and GID
+   ```
+
+4. **Enable debug logging to see auth context:**
+   ```bash
+   DITTOFS_LOGGING_LEVEL=DEBUG ./dfs start
+   # Look for lines showing UID/GID in requests
+   ```
+
+### Read-only filesystem
+
+**Symptoms:**
+
+```
+touch: cannot touch 'file.txt': Read-only file system
+```
+
+**Solutions:**
+
+1. **Check share configuration:**
+   ```yaml
+   shares:
+     - name: /export
+       read_only: false  # Must be false for writes
+   ```
+
+2. **Verify mount options:**
+   ```bash
+   # Make sure you're not mounting with 'ro'
+   sudo mount -t nfs -o nfsvers=3,tcp,port=12049,mountport=12049,rw localhost:/export /mnt/test
+   ```
+
+## File Handle Issues
+
+### Stale file handle
+
+**Symptoms:**
+
+```
+ls: cannot access 'file.txt': Stale file handle
+```
+
+**Causes:**
+
+* Server was restarted with in-memory metadata (handles lost)
+* File was deleted while client held a handle
+* Metadata backend was changed
+
+**Solutions:**
+
+1. **Unmount and remount the filesystem:**
+   ```bash
+   sudo umount /mnt/test
+   sudo mount -t nfs -o nfsvers=3,tcp,port=12049,mountport=12049 localhost:/export /mnt/test
+   ```
+
+2. **For persistent handles, use BadgerDB metadata:**
+   ```bash
+   ./dfsctl store metadata add --name persistent --type badger \
+     --config '{"path":"/var/lib/dfs/metadata"}'
+   ./dfsctl store payload add --name default --type memory
+   ./dfsctl share create --name /export --metadata persistent --payload default
+   ```
+
+3. **Clear client NFS cache (Linux):**
+   ```bash
+   # This varies by distribution
+   sudo service nfs-common restart
+   ```
+
+## Performance Issues
+
+### Slow read/write operations
+
+**Diagnostics:**
+
+```bash
+# Run benchmarks to identify bottleneck
+./scripts/benchmark.sh --profile
+
+# Check server logs for slow operations
+tail -f ~/.config/dfs/dfs.log | grep -i "slow\|timeout"
+```
+
+**Solutions:**
+
+1. **Tune buffer sizes:**
+   ```yaml
+   metadata:
+     global:
+       filesystem_capabilities:
+         max_read_size: 1048576   # 1MB
+         max_write_size: 1048576  # 1MB
+   ```
+
+2. **Use memory stores for development:**
+   ```bash
+   ./dfsctl store metadata add --name fast --type memory
+   ./dfsctl store payload add --name fast --type memory
+   ```
+
+3. **For S3, verify configuration:**
+   ```bash
+   ./dfsctl store payload add --name s3-store --type s3 \
+     --config '{"region":"us-east-1","bucket":"my-bucket"}'
+   ```
+
+### High memory usage
+
+**Diagnostics:**
+
+```bash
+# Profile memory usage
+go test -bench=. -memprofile=mem.prof ./test/e2e/
+go tool pprof mem.prof
+```
+
+**Solutions:**
+
+1. **Check for memory leaks in logs**
+
+2. **Reduce max connections:**
+   ```yaml
+   adapters:
+     nfs:
+       max_connections: 100
+   ```
+
+3. **Monitor metrics:**
+   ```yaml
+   server:
+     metrics:
+       enabled: true
+       port: 9090
+   ```
+   Then visit `http://localhost:9090/metrics`
+
+## Logging and Debugging
+
+### Enable Debug Logging
+
+**Via environment variable:**
+
+```bash
+DITTOFS_LOGGING_LEVEL=DEBUG ./dfs start
+```
+
+**Via configuration:**
+
+```yaml
+logging:
+  level: DEBUG
+  format: text  # or json
+  output: stdout  # or file path
+```
+
+### Understanding Log Output
+
+**Key log patterns:**
+
+* `[INFO] NFS: Accepted connection from 127.0.0.1:54321` - Client connected
+* `[DEBUG] NFS: LOOKUP(handle=..., name=file.txt)` - Operation details
+* `[ERROR] NFS: Failed to read file: no such file` - Error conditions
+* `[DEBUG] Auth: UID=1000, GID=1000, GIDs=[1000,4,20]` - Authentication context
+
+### Capture Traffic
+
+For deep debugging, capture NFS traffic:
+
+```bash
+# Linux
+sudo tcpdump -i lo -w nfs.pcap port 12049
+
+# macOS
+sudo tcpdump -i lo0 -w nfs.pcap port 12049
+
+# Analyze with Wireshark
+wireshark nfs.pcap
+```
+
+### Check Server Health
+
+```bash
+# Check if server is responding
+./dfs status
+
+# Check metrics (if enabled)
+curl http://localhost:9090/metrics
+
+# Check configuration
+DITTOFS_LOGGING_LEVEL=DEBUG ./dfs start 2>&1 | grep -i "config"
+```
+
+## Common Error Messages
+
+### "export not found"
+
+**Cause:** The share name in the mount command doesn't match configuration.
+
+**Solution:** Check share names in config and use exact match:
+
+```bash
+# If config has "name: /export"
+sudo mount -t nfs -o nfsvers=3,tcp,port=12049,mountport=12049 localhost:/export /mnt/test
+```
+
+### "authentication failed"
+
+**Cause:** Server requires authentication but client isn't providing it.
+
+**Solution:** Either disable authentication or configure it properly:
+
+```yaml
+shares:
+  - name: /export
+    require_auth: false
+    allowed_auth_methods: [anonymous, unix]
+```
+
+### "metadata store not found"
+
+**Cause:** Share references a non-existent metadata store.
+
+**Solution:** Ensure stores exist before creating the share:
+
+```bash
+# Create the stores first
+./dfsctl store metadata add --name my-store --type memory
+./dfsctl store payload add --name my-payload --type memory
+
+# Then create the share referencing them
+./dfsctl share create --name /export --metadata my-store --payload my-payload
+```
+
+### NFSv4 Session Issues
+
+#### Client cannot establish NFSv4 session
+
+**Symptoms:**
+
+```
+mount.nfs4: Protocol not supported
+```
+
+**Solutions:**
+
+1. Verify NFSv4 is enabled in the adapter settings:
+   ```bash
+   dfsctl adapter settings nfs
+   ```
+2. Check that the client supports NFSv4. Some older clients default to NFSv3.
+3. Try mounting with explicit version:
+   ```bash
+   sudo mount -t nfs4 localhost:/export /mnt/test
+   ```
+
+#### Session expired or lost
+
+**Symptoms:**
+
+```
+NFS4ERR_EXPIRED or NFS4ERR_STALE_CLIENTID
+```
+
+**Solutions:**
+
+1. The server may have restarted, causing session loss. Remount the share.
+2. Check the grace period status:
+   ```bash
+   dfsctl grace status
+   ```
+3. If in grace period, wait for it to complete before retrying.
+
+### Kerberos Authentication Issues
+
+#### Kerberos authentication fails
+
+**Symptoms:**
+
+```
+mount.nfs4: access denied by server
+```
+
+with RPCSEC\_GSS configured.
+
+**Solutions:**
+
+1. Verify the keytab file is accessible:
+   ```bash
+   klist -k /etc/krb5.keytab
+   ```
+2. Check that the service principal matches the server hostname
+3. Verify clock synchronization between client and KDC (Kerberos requires clocks within 5 minutes)
+4. Enable debug logging to see the RPCSEC\_GSS negotiation:
+   ```bash
+   DITTOFS_LOGGING_LEVEL=DEBUG ./dfs start
+   ```
+
+### ACL Issues
+
+#### ACL operations fail with NFS3ERR\_NOTSUPP
+
+**Symptoms:**
+
+```
+setfacl: Operation not supported
+```
+
+**Solutions:**
+
+1. ACLs require NFSv4. Ensure you are mounting with NFSv4:
+   ```bash
+   sudo mount -t nfs4 localhost:/export /mnt/test
+   ```
+2. NFSv3 does not support ACLs - only standard POSIX mode bits.
+
+## Getting More Help
+
+If you're still experiencing issues:
+
+1. **Check existing issues:** [GitHub Issues](https://github.com/marmos91/dittofs/issues)
+2. **Enable debug logging** and capture relevant output
+3. **Open a new issue** with:
+   * DittoFS version
+   * Operating system and version
+   * Configuration file (redact sensitive info)
+   * Full error messages
+   * Debug logs showing the problem
+   * Steps to reproduce
