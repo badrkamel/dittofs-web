@@ -1,0 +1,125 @@
+---
+import { Icon } from '@astrojs/starlight/components'
+import config from 'virtual:starlight-versions-config'
+
+import { ALL_VERSIONS_PATH } from '../../../integrations/all-versions-page.mjs'
+
+// Archived versions shown before "All versions…". Latest is always shown.
+const VISIBLE_VERSIONS = 5
+
+type Version = (typeof config.versions)[number]
+
+// The site has no locales and no base, so a version is always the first path segment.
+const segments = Astro.url.pathname.split('/')
+const pageIndex = config.versions.findIndex((v) => v.slug === segments[1])
+const tail = pageIndex === -1 ? Astro.url.pathname : `/${segments.slice(2).join('/')}`
+
+// The "All versions" page only exists for Latest, so from there every link goes to a docs root.
+const onAllVersions = Astro.url.pathname.replace(/\/?$/, '/') === ALL_VERSIONS_PATH
+const href = (version?: Version) => {
+  if (!version) return onAllVersions ? '/docs/' : tail
+  return onAllVersions || version.redirect === 'root' ? `/${version.slug}/docs/` : `/${version.slug}${tail}`
+}
+
+// Keep the current page's version visible even when it is older than the cutoff.
+const visible = config.versions.slice(0, Math.max(VISIBLE_VERSIONS, pageIndex + 1))
+---
+
+<dfs-version-select>
+  <label>
+    <span class="sr-only">{Astro.locals.t('starlightVersions.select.accessibleLabel')}</span>
+    <Icon name="seti:clock" class="icon label-icon" />
+    <select autocomplete="off">
+      <option selected={pageIndex === -1 && !onAllVersions} value={href()}>{config.current.label}</option>
+      {
+        visible.map((version, i) => (
+          <option selected={i === pageIndex} value={href(version)}>
+            {version.label ?? version.slug}
+          </option>
+        ))
+      }
+      <option selected={onAllVersions} value={ALL_VERSIONS_PATH}>All versions…</option>
+    </select>
+    <Icon name="down-caret" class="icon caret-icon" />
+  </label>
+</dfs-version-select>
+
+<style>
+  label {
+    --sl-versions-label-icon-size: 0.875rem;
+    --sl-versions-caret-icon-size: 1.25rem;
+
+    align-items: center;
+    color: var(--sl-color-gray-1);
+    display: flex;
+    gap: 0.25rem;
+    position: relative;
+  }
+
+  label:hover {
+    color: var(--sl-color-gray-2);
+  }
+
+  .icon {
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .label-icon {
+    font-size: var(--sl-versions-label-icon-size);
+    inset-inline-start: 0;
+  }
+
+  .caret-icon {
+    font-size: var(--sl-versions-caret-icon-size);
+    inset-inline-end: 0;
+  }
+
+  select {
+    appearance: none;
+    background-color: transparent;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    padding-block: 0.625rem;
+    padding-inline: calc(var(--sl-versions-label-icon-size) + 0.375rem)
+      calc(var(--sl-versions-caret-icon-size) + 0.25rem);
+    text-overflow: ellipsis;
+    width: 6.5em;
+  }
+
+  option {
+    background-color: var(--sl-color-bg-nav);
+    color: var(--sl-color-gray-1);
+  }
+
+  @media (min-width: 50rem) {
+    select {
+      font-size: var(--sl-text-sm);
+    }
+  }
+</style>
+
+<script>
+  customElements.define(
+    'dfs-version-select',
+    class DfsVersionSelect extends HTMLElement {
+      connectedCallback() {
+        const select = this.querySelector('select')
+        if (!select) return
+
+        select.addEventListener('change', () => {
+          globalThis.location.pathname = select.value
+        })
+
+        // A page restored from the back/forward cache can show a stale selection.
+        window.addEventListener('pageshow', (event) => {
+          if (!event.persisted) return
+          select.selectedIndex = select.querySelector<HTMLOptionElement>('option[selected]')?.index ?? 0
+        })
+      }
+    },
+  )
+</script>
