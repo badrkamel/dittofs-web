@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { ALL_VERSIONS_PATH } from "../integrations/all-versions-page.mjs";
 import { resolveVersionNavigation } from "../src/lib/version-navigation.mjs";
 
-const routes = new Set(["/docs", "/docs/getting-started/cli", "/docs/operations/security",
+const routes = new Set([ALL_VERSIONS_PATH.replace(/\/$/, ""), "/docs", "/docs/getting-started/cli", "/docs/operations/security",
   "/v0.1/docs", "/v0.1/docs/contributing/cache", "/v0.1/docs/operations/security",
   "/v0.34/docs", "/v0.34/docs/getting-started/cli", "/v0.34/docs/operations/security"]);
 
@@ -25,4 +26,9 @@ test("external, non-documentation and unknown-version destinations are not rewri
 test("search notices use the same fallback for entity-encoded unquoted hrefs", () => {
   assert.equal(resolveVersionNavigation('<a href=&#x2F;docs&#x2F;contributing&#x2F;cache&#x2F;>latest version</a>', routes),
     '<a href="/docs/">latest version</a>');
+});
+
+test("compact selector retains All versions, native root choices and the visible version", () => {
+  const input = `<dfs-version-select><select><option value="/docs/getting-started/cli/">Latest</option><option value="/v0.34/docs/getting-started/cli/" selected>v0.34</option><option value="/v0.1/docs/">v0.1</option><option value="${ALL_VERSIONS_PATH}">All versions…</option></select></dfs-version-select>`;
+  assert.equal(resolveVersionNavigation(input, routes), input);
 });

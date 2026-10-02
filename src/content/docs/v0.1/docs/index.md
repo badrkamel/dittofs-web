@@ -19,23 +19,14 @@ formats may change.
 
 ## Key concepts
 
-* **Protocol adapters** — NFS and SMB can run at the same time on one server.
-* **Control plane** — central management of users, groups, shares, and
-  configuration through a REST API.
-* **Shares** — the export points clients mount, each referencing specific
-  stores.
-* **Named store registry** — reusable store instances shared across exports.
-* **Pluggable storage** — mix metadata stores (memory, BadgerDB, PostgreSQL)
-  and block stores (filesystem, S3) per share.
+- **Protocol adapters**: NFS and SMB can run at the same time on one server.
+- **Control plane**: central management of users, groups, shares, and configuration through a REST API.
+- **Shares**: the paths clients mount over NFS or SMB, each referencing specific stores.
+- **Named store registry**: store instances defined once and reused by several shares.
+- **Pluggable storage**: mix metadata stores (memory, BadgerDB, PostgreSQL) and block stores (filesystem, S3) per share.
 
 ## Where to go next
 
-* [Getting started](https://github.com/marmos91/dittofs/blob/v0.1.0/README.md#quick-start) — install the
-  server and mount your first share.
-* [Configuration](/v0.1/docs/getting-started/configuration/) — server config and
-  store management.
-* [Command examples](https://github.com/marmos91/dittofs/blob/v0.1.0/README.md#quick-start) — commands available in this release’s README.
-* [NFS](/v0.1/docs/connect/nfs/) and [SMB](/v0.1/docs/connect/smb/) — protocol details
-  and client usage.
-* [Architecture](/v0.1/docs/contributing/architecture/) — how the pieces fit
-  together (for contributors).
+- [Configuration](/v0.1/docs/getting-started/configuration/): server config and store management.
+- [NFS](/v0.1/docs/connect/nfs/) and [SMB](/v0.1/docs/connect/smb/): protocol details and client usage.
+- [Architecture](/v0.1/docs/contributing/architecture/): how the pieces fit together (for contributors).

@@ -1,0 +1,26 @@
+---
+// Starlight's Sidebar with the mobile menu footer (social icons, version and
+// theme selectors) moved above the page list instead of below it.
+import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro'
+import SidebarPersister from '@astrojs/starlight/components/SidebarPersister.astro'
+import SidebarSublist from '@astrojs/starlight/components/SidebarSublist.astro'
+
+const { sidebar } = Astro.locals.starlightRoute
+---
+
+<div class="md:sl-hidden mobile-menu-top">
+  <MobileMenuFooter />
+</div>
+
+<SidebarPersister>
+  <SidebarSublist sublist={sidebar} />
+</SidebarPersister>
+
+<style>
+  /* The footer draws a top border to separate it from the list above; at the top, separate it from the list below instead. */
+  .mobile-menu-top :global(.mobile-preferences) {
+    border-top: 0;
+    border-bottom: 1px solid var(--sl-color-gray-6);
+    margin-top: -0.5rem;
+  }
+</style>
