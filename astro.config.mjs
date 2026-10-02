@@ -14,6 +14,18 @@ import docsImages from "./integrations/docs-images.mjs";
  * stays empty — an empty list leaves the site single-version with no switcher.
  */
 const DOC_VERSIONS = [
+  { slug: "v0.34" },
+  { slug: "v0.33" },
+  { slug: "v0.32" },
+  { slug: "v0.31" },
+  { slug: "v0.30" },
+  { slug: "v0.29" },
+  { slug: "v0.28" },
+  { slug: "v0.27" },
+  { slug: "v0.26" },
+  { slug: "v0.25" },
+  { slug: "v0.24" },
+  { slug: "v0.23" },
   { slug: "v0.22" },
 ];
 
