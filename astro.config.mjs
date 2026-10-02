@@ -111,6 +111,7 @@ export default defineConfig({
       customCss: ["./src/styles/starlight.css"],
       components: {
         ThemeSelect: "./src/components/StarlightThemeSelect.astro",
+        Search: "./src/components/StarlightSearch.astro",
         PageTitle: "./src/components/StarlightPageTitle.astro",
         Banner: "./src/components/StarlightBanner.astro",
       },

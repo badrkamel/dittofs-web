@@ -21,3 +21,8 @@ test("external, non-documentation and unknown-version destinations are not rewri
   const input = '<a href="https://example.org/docs/missing">external</a><a href="//example.org/docs/missing">external</a><a href="/pro">Pro</a><a href="/v9.9/docs/missing">unknown</a><option value="dark">Dark</option>';
   assert.equal(resolveVersionNavigation(input, routes), input);
 });
+
+test("search notices use the same fallback for entity-encoded unquoted hrefs", () => {
+  assert.equal(resolveVersionNavigation('<a href=&#x2F;docs&#x2F;contributing&#x2F;cache&#x2F;>latest version</a>', routes),
+    '<a href="/docs/">latest version</a>');
+});
