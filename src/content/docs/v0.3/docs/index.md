@@ -34,8 +34,7 @@ formats may change.
   server and mount your first share.
 * [Configuration](/v0.3/docs/getting-started/configuration/) — server config and
   store management.
-* [CLI reference](https://github.com/marmos91/dittofs/blob/v0.3.4/README.md) — every `dfs` and `dfsctl`
-  command.
+* [Command examples](https://github.com/marmos91/dittofs/blob/v0.3.4/README.md#quick-start) — commands available in this release’s README.
 * [NFS](/v0.3/docs/connect/nfs/) and [SMB](/v0.3/docs/connect/smb/) — protocol details
   and client usage.
 * [Architecture](/v0.3/docs/contributing/architecture/) — how the pieces fit
