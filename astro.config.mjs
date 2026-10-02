@@ -5,6 +5,7 @@ import starlight from "@astrojs/starlight";
 import starlightVersions from "starlight-versions";
 import { readFileSync } from "node:fs";
 import docsImages from "./integrations/docs-images.mjs";
+import consentFooter from "./src/plugins/consent-footer";
 
 /*
  * Documentation versions. The latest docs are served at /docs/* (no entry
@@ -98,22 +99,20 @@ export default defineConfig({
       editLink: {
         baseUrl: `${GITHUB_REPO}/edit/develop/docs/`,
       },
-      components: {
-        Footer: "./src/components/StarlightFooter.astro",
-        EditLink: "./src/components/StarlightEditLink.astro",
-      },
       customCss: ["./src/styles/starlight.css"],
       // The versions plugin requires at least one version; until the first
       // release snapshot is cut, DOC_VERSIONS is empty and we omit the plugin
       // (the site stays single-version, no switcher). Add a slug to
       // DOC_VERSIONS to enable it. See scripts/VERSIONING.md.
-      plugins:
-        DOC_VERSIONS.length > 0
+      plugins: [
+        consentFooter,
+        ...(DOC_VERSIONS.length > 0
           ? [starlightVersions({
               current: { label: latestDocsLabel() },
               versions: DOC_VERSIONS,
             })]
-          : [],
+          : []),
+      ],
       sidebar: [
         { label: "Getting Started", items: [{ autogenerate: { directory: "docs/getting-started" } }] },
         { label: "Connect Clients", items: [{ autogenerate: { directory: "docs/connect" } }] },
